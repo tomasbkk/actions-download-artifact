@@ -31,15 +31,19 @@ async function main() {
     const latest = latest_input ? latest_input.toLowerCase() === 'true' : false;
 
     const { Octokit } = require("@octokit/rest");
+    const { paginateRest, composePaginateRest,} = require("@octokit/plugin-paginate-rest");
     const { createTokenAuth } = require("@octokit/auth-token");
-    const { throttling } = require("@octokit/plugin-throttling");
-    const { retry } = require("@octokit/plugin-retry");
-    //const { retryOptions } = require("config"); // import your throttling and retry options
-
-    const MyOctokit = Octokit.plugin(throttling, retry);
-
+    //const { throttling } = require("@octokit/plugin-throttling");
+    //const { retry } = require("@octokit/plugin-retry");
+    const { restEndpointMethods } = require("@octokit/plugin-rest-endpoint-methods");
     const auth = createTokenAuth(token);
-    const octokit = new MyOctokit({
+    
+    //const RestOctokit = Octokit.plugin(retry, throttling);
+    const DownloadOctokit = Octokit.plugin(restEndpointMethods);
+    
+    const dlOcto = new DownloadOctokit({ auth: token });
+/*
+    const dlOcto = new DownloadOctokit({
       auth: token,
       authStrategy: auth,
       throttle: {
@@ -51,22 +55,17 @@ async function main() {
             return true
           }
         },
-        onAbuseLimit: (retryAfter, options) => {
+        onSecondaryRateLimit: (retryAfter, options, octokit) => {
           // does not retry, only logs a warning
-          octokit.log.warn(`Abuse detected for request ${options.method} ${options.url}`)
-        }
+          octokit.log.warn(`Secondary quota detected for request ${options.method} ${options.url}`);
+        },
       },
     });
-
-    const client = octokit;
-
+*/
     const PaginateOctokit = Octokit.plugin(paginateRest);
     const pageOcto = new PaginateOctokit({ auth: token });
-    
-    //const client = github.getOctokit(token);
 
     console.log('input', path, artifactName, latest);
-
     console.log("==> Repo:", owner + "/" + repo);
 
     const artifactsEndpoint = "GET /repos/:owner/:repo/actions/artifacts";
@@ -77,21 +76,14 @@ async function main() {
     };
 
     let artifacts = [];
-    
-    
-    artifacts = await pageOcto.paginate(artifactsEndpoint, artifactsEndpointParams);
 
-/*
-    for await (const artifactResponse of client.paginate
+    for await (const artifactResponse of pageOcto.paginate
       .iterator(artifactsEndpoint, artifactsEndpointParams)) {
         artifacts = artifacts.concat(artifactResponse.data
         .filter(artifact => !artifact.expired)
         .filter(artifact => artifactName ? artifact.name === artifactName : true)
       );
     }
-*/
-
-    console.log("after artifactResponse");
     
     if (latest && artifacts && artifacts.length) {
       console.log('Get latest artifact');
@@ -121,13 +113,14 @@ async function main() {
 
         console.log("==> Downloading:", artifact.name + ".zip", `(${size})`);
 
-        const zip = await client.actions.downloadArtifact({
+        const zip = await dlOcto.actions.downloadArtifact({
           owner: owner,
           repo: repo,
           artifact_id: artifact.id,
           archive_format: "zip",
         });
 
+        console.log("Download complete.");
         const dir = artifactName ? path : pathname.join(path, artifact.name);
 
         fs.mkdirSync(dir, { recursive: true });
