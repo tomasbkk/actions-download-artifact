@@ -30,7 +30,25 @@ async function main() {
     const latest_input = (core.getInput("latest", { required: false }));
     const latest = latest_input ? latest_input.toLowerCase() === 'true' : false;
 
-    const client = github.getOctokit(token);
+    const { Octokit } = require("@octokit/rest");
+    const { createTokenAuth } = require("@octokit/auth-token");
+    const { throttling } = require("@octokit/plugin-throttling");
+    const { retry } = require("@octokit/plugin-retry");
+    const { throttlingOptions, retryOptions } = require("./config"); // import your throttling and retry options
+
+    const MyOctokit = Octokit.plugin(throttling, retry);
+
+    const auth = createTokenAuth(process.env.GITHUB_TOKEN);
+    const octokit = new MyOctokit({
+      auth: process.env.GITHUB_TOKEN,
+      authStrategy: auth,
+      throttle: throttlingOptions,
+      retry: retryOptions,
+    });
+
+    const client = octokit;
+
+    //const client = github.getOctokit(token);
 
     console.log('input', path, artifactName, latest);
 
