@@ -77,7 +77,7 @@ async function main() {
       for (let artifact of artifacts) {
         console.log("==> Artifact:", artifact.id);
 
-        const size = filesize(artifact.size_in_bytes, { base: 10 });
+        const size = filesize(artifact.size_in_bytes);
 
         console.log("==> Downloading:", artifact.name + ".zip", `(${size})`);
 
